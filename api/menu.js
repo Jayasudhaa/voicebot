@@ -1,318 +1,52 @@
-{
-  "categories": [
-    {
-      "name": "Popular Items",
-      "items": [
-        {
-          "name": "Chicken Tikka Masala",
-          "price": 17.0
-        },
-        {
-          "name": "Butter Naan",
-          "price": 3.5
-        },
-        {
-          "name": "Garlic Naan",
-          "price": 4.0
-        },
-        {
-          "name": "Veg Samosa (2)",
-          "price": 7.0
-        },
-        {
-          "name": "Veg Dum Biryani",
-          "price": 16.0
-        },
-        {
-          "name": "Tandoori Chicken",
-          "price": 19.0
-        },
-        {
-          "name": "Paneer Tikka Masala",
-          "price": 17.0
-        }
-      ]
-    },
-    {
-      "name": "Curries",
-      "items": [
-        {
-          "name": "Chicken Makhani",
-          "price": 16.0
-        },
-        {
-          "name": "Chicken Korma",
-          "price": 17.0
-        },
-        {
-          "name": "Chicken Rogan Josh",
-          "price": 17.0
-        },
-        {
-          "name": "Chicken Chettinad",
-          "price": 17.0
-        },
-        {
-          "name": "Andhra Chicken Curry",
-          "price": 16.0
-        },
-        {
-          "name": "Chicken Tikka Masala",
-          "price": 17.0
-        },
-        {
-          "name": "Kadai Chicken",
-          "price": 17.0
-        },
-        {
-          "name": "Lamb Makhani",
-          "price": 20.0
-        },
-        {
-          "name": "Lamb Korma",
-          "price": 20.0
-        },
-        {
-          "name": "Lamb Rogan Josh",
-          "price": 20.0
-        },
-        {
-          "name": "Lamb Chettinad",
-          "price": 20.0
-        },
-        {
-          "name": "Kadai Lamb",
-          "price": 20.0
-        },
-        {
-          "name": "Goat Curry",
-          "price": 18.0
-        },
-        {
-          "name": "Goat Korma",
-          "price": 20.0
-        },
-        {
-          "name": "Goat Rogan Josh",
-          "price": 20.0
-        },
-        {
-          "name": "Goat Chettinad",
-          "price": 20.0
-        },
-        {
-          "name": "Kadai Goat",
-          "price": 20.0
-        },
-        {
-          "name": "Saag (Spinach) Goat",
-          "price": 20.0
-        },
-        {
-          "name": "Shrimp Curry",
-          "price": 21.0
-        },
-        {
-          "name": "Shrimp Makhani",
-          "price": 20.0
-        },
-        {
-          "name": "Kadai Shrimp",
-          "price": 21.0
-        },
-        {
-          "name": "Fish Moilee",
-          "price": 20.0
-        },
-        {
-          "name": "Dal Makhani",
-          "price": 16.0
-        },
-        {
-          "name": "Dal Tadka",
-          "price": 16.0
-        },
-        {
-          "name": "Channa Masala",
-          "price": 16.0
-        },
-        {
-          "name": "Aloo Gobi Curry",
-          "price": 16.0
-        },
-        {
-          "name": "Bagara Baingan",
-          "price": 16.0
-        },
-        {
-          "name": "Punjabi Saag (Spinach) Paneer",
-          "price": 17.0
-        },
-        {
-          "name": "Kashmiri Malai Kofta",
-          "price": 17.0
-        },
-        {
-          "name": "Veg Korma",
-          "price": 14.0
-        },
-        {
-          "name": "Vegetable Chettinad",
-          "price": 14.0
-        },
-        {
-          "name": "Signature Mango Curry - Veg",
-          "price": 16.0
-        },
-        {
-          "name": "Signature Mango Curry - Chicken",
-          "price": 17.0
-        },
-        {
-          "name": "Signature Mango Curry - Lamb",
-          "price": 20.0
-        },
-        {
-          "name": "Signature Mango Curry - Goat",
-          "price": 20.0
-        },
-        {
-          "name": "Signature Mango Curry - Fish",
-          "price": 20.0
-        },
-        {
-          "name": "Telangana Gongura Chicken Curry",
-          "price": 17.0
-        },
-        {
-          "name": "Telangana Gongura Lamb Curry",
-          "price": 20.0
-        },
-        {
-          "name": "Telangana Gongura Mutton Curry",
-          "price": 20.0
-        },
-        {
-          "name": "Telangana Gongura Shrimp Curry",
-          "price": 21.0
-        },
-        {
-          "name": "Fiery Goan Vindaloo - Chicken",
-          "price": 17.0
-        },
-        {
-          "name": "Fiery Goan Vindaloo - Lamb",
-          "price": 20.0
-        },
-        {
-          "name": "Fiery Goan Vindaloo - Goat",
-          "price": 20.0
-        },
-        {
-          "name": "Fiery Goan Vindaloo - Shrimp",
-          "price": 20.0
-        },
-        {
-          "name": "Fiery Goan Vindaloo - Fish",
-          "price": 20.0
-        },
-        {
-          "name": "Nadan Curry - Chicken",
-          "price": 16.0
-        },
-        {
-          "name": "Nadan Curry - Goat",
-          "price": 20.0
-        },
-        {
-          "name": "Nellore Chepala Pulusu",
-          "price": 22.0
-        }
-      ]
-    },
-    {
-      "name": "Breads",
-      "items": [
-        {
-          "name": "Plain Naan",
-          "price": 3.0
-        },
-        {
-          "name": "Butter Naan",
-          "price": 3.5
-        },
-        {
-          "name": "Garlic Naan",
-          "price": 4.0
-        },
-        {
-          "name": "Tikka Naan",
-          "price": 4.0
-        },
-        {
-          "name": "Tandoori Roti",
-          "price": 4.0
-        },
-        {
-          "name": "Chapathi",
-          "price": 3.5
-        },
-        {
-          "name": "Pulka",
-          "price": 4.0
-        },
-        {
-          "name": "Malabar Parotta (2)",
-          "price": 6.0
-        }
-      ]
-    },
-    {
-      "name": "Biryanis",
-      "items": [
-        {
-          "name": "Veg Dum Biryani",
-          "price": 16.0
-        },
-        {
-          "name": "Vijayawada Chicken (BoneOut) Biryani",
-          "price": 19.0
-        },
-        {
-          "name": "Konaseema Goat Biryani",
-          "price": 21.0
-        },
-        {
-          "name": "Lamb Biryani",
-          "price": 20.0
-        },
-        {
-          "name": "Shrimp Biryani",
-          "price": 20.0
-        },
-        {
-          "name": "Goat Dum Biryani",
-          "price": 20.0
-        }
-      ]
-    },
-    {
-      "name": "Drinks",
-      "items": [
-        {
-          "name": "Fresh Lime Soda - Salt",
-          "price": 4.0
-        }
-      ]
-    },
-    {
-      "name": "Desserts",
-      "items": [
-        {
-          "name": "Black Forest Pastry",
-          "price": 4.0
-        }
-      ]
-    }
-  ]
+// api/menu.js
+const path = require('path');
+
+function slug(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+    .slice(0, 40)
+    .toUpperCase();
 }
+
+module.exports = (req, res) => {
+  try {
+    // Load categorized data; flatten to items[]
+    let data;
+    try {
+      data = require('../data/menu_categorized.json');
+    } catch (e) {
+      data = null;
+    }
+
+    let items = [];
+    if (data && Array.isArray(data.categories) && data.categories.length) {
+      items = data.categories.flatMap(cat =>
+        (cat.items || []).map(it => ({
+          sku: slug(it.name),
+          name: it.name,
+          price: Number(it.price),
+          category: cat.name
+        }))
+      );
+      return res.status(200).json({ source: 'categorized', items });
+    }
+
+    // Fallback if file not found
+    items = [
+      { sku: 'CHICKEN-TIKKA', name: 'Chicken Tikka', price: 12.99, category: 'Popular Items' },
+      { sku: 'GARLIC-NAAN',   name: 'Garlic Naan',   price:  3.49, category: 'Breads' }
+    ];
+    return res.status(200).json({ source: 'fallback', items });
+  } catch (err) {
+    console.error('menu error:', err);
+    return res.status(200).json({
+      source: 'error_fallback',
+      items: [
+        { sku: 'CHICKEN-TIKKA', name: 'Chicken Tikka', price: 12.99, category: 'Popular Items' },
+        { sku: 'GARLIC-NAAN',   name: 'Garlic Naan',   price:  3.49, category: 'Breads' }
+      ]
+    });
+  }
+};
