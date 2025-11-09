@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "twilio": "^4.22.0"
+    "twilio": "^4.22.0",
+    "puppeteer-core": "^22.12.1",
+    "@sparticuz/chromium-min": "^119.0.0"
   }
 }
