@@ -10,14 +10,15 @@ const smsClient = (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN)
   ? twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
   : null;
 
-const MENU = [
-  { sku:'CKTIKKA', name:'Chicken Tikka', price:12.99, options:{spice:['mild','medium','hot']} },
-  { sku:'GNAAN',   name:'Garlic Naan',   price: 3.49 }
-];
+const DATA = require('../data/menu.json');
+const MENU = DATA.items || [];
 
 function lookup(item) {
   const key = (item?.sku || item?.name || '').toLowerCase();
-  return MENU.find(m => m.sku.toLowerCase() === key || m.name.toLowerCase() === key) || null;
+  return MENU.find(m =>
+    (m.sku && m.sku.toLowerCase() === key) ||
+    (m.name && m.name.toLowerCase() === key)
+  ) || null;
 }
 function price(items = []) {
   let subtotal = 0;
