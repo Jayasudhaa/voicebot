@@ -316,3 +316,19 @@
     }
   ]
 }
+[
+  { "sku": "COFFEE",              "name": "Coffee (Hot)",                 "unitPrice": 2.99 },
+  { "sku": "MASALA-CHAI",         "name": "Masala Chai",                  "unitPrice": 3.49 },
+
+  { "sku": "LASSI-SWEET",         "name": "Sweet Lassi",                  "unitPrice": 4.99 },
+  { "sku": "LASSI-SALT",          "name": "Salt Lassi",                   "unitPrice": 4.99 },
+  { "sku": "LASSI-MANGO",         "name": "Mango Lassi",                  "unitPrice": 5.49 },
+
+  { "sku": "JUICE-ORANGE",        "name": "Fresh Juice - Orange",         "unitPrice": 5.99 },
+  { "sku": "JUICE-PINEAPPLE",     "name": "Fresh Juice - Pineapple",      "unitPrice": 5.99 },
+  { "sku": "JUICE-WATERMELON",    "name": "Fresh Juice - Watermelon",     "unitPrice": 5.99 },
+
+  { "sku": "CKTLS-MANGO-MULE",    "name": "Cocktail Special - Mango Mule","unitPrice": 12.00, "notes": "21+ ID required" },
+  { "sku": "CKTLS-TAMARIND-MARG", "name": "Cocktail Special - Tamarind Margarita", "unitPrice": 12.00, "notes": "21+ ID required" },
+  { "sku": "CKTLS-MASALA-OF",     "name": "Cocktail Special - Masala Old Fashioned","unitPrice": 13.00, "notes": "21+ ID required" }
+]
