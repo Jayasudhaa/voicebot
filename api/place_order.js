@@ -1,5 +1,12 @@
 const twilio = require('twilio');
 
+// ⬇️ ADD: Resend email sender
+const { Resend } = require('resend');
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const DEFAULT_EMAIL_TO = process.env.DEFAULT_EMAIL_TO || 't.n.jayasudhaa@gmail.com';
+const EMAIL_FROM = process.env.EMAIL_FROM || 'Order Bot <onboarding@resend.dev>';
+const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
+
 const {
   TWILIO_ACCOUNT_SID,
   TWILIO_AUTH_TOKEN,
@@ -47,6 +54,37 @@ function price(items = []) {
 
 function isE164(p){ return /^\+?[1-9]\d{1,14}$/.test((p||'').trim()); }
 
+// ⬇️ ADD: email HTML renderer
+function renderEmailHTML({ orderId, customer, fulfillment, lines, subtotal, tax, total, notes }) {
+  const rows = lines.map(li =>
+    `<tr>
+      <td style="padding:6px 8px;border-bottom:1px solid #eee;">${li.qty} × ${li.name}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right;">$${(li.unitPrice * li.qty).toFixed(2)}</td>
+    </tr>`
+  ).join('');
+
+  return `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#222;">
+      <h2 style="margin:0 0 8px;">Thanks for your order!</h2>
+      <p style="margin:0 0 16px;">Hi ${customer?.name || 'Guest'}, your order has been received.</p>
+
+      <p style="margin:0 0 6px;"><strong>Order ID:</strong> ${orderId}</p>
+      <p style="margin:0 0 6px;"><strong>Fulfillment:</strong> ${fulfillment?.type || ''} — ${fulfillment?.when || ''}${fulfillment?.address ? ` — ${fulfillment.address}` : ''}</p>
+
+      <table cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin:12px 0 8px;">
+        <tbody>${rows}</tbody>
+        <tfoot>
+          <tr><td style="padding:6px 8px;text-align:right;"><strong>Subtotal</strong></td><td style="padding:6px 8px;text-align:right;">$${subtotal.toFixed(2)}</td></tr>
+          <tr><td style="padding:6px 8px;text-align:right;"><strong>Tax</strong></td><td style="padding:6px 8px;text-align:right;">$${tax.toFixed(2)}</td></tr>
+          <tr><td style="padding:6px 8px;text-align:right;"><strong>Total</strong></td><td style="padding:6px 8px;text-align:right;"><strong>$${total.toFixed(2)}</strong></td></tr>
+        </tfoot>
+      </table>
+
+      ${notes ? `<p style="margin:8px 0 0;"><strong>Notes:</strong> ${notes}</p>` : ''}
+    </div>
+  `;
+}
+
 // Accept raw JSON or {"json":"<stringified>"} (what Vapi sometimes sends)
 function parseBody(req) {
   let b = req.body;
@@ -65,8 +103,8 @@ module.exports = async (req, res) => {
     if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
     const body = parseBody(req);
-    const { customer, fulfillment, items = [], notes = '' } = body || {};
-    const phone = (customer?.phone || '').trim();
+    const { customer = {}, fulfillment = {}, items = [], notes = '' } = body || {};
+    const phone = (customer.phone || '').trim();
     const orderId = `ord_${Date.now()}`;
 
     const priced = price(items);
@@ -99,15 +137,43 @@ module.exports = async (req, res) => {
       }
     }
 
+    // ⬇️ ADD: Email receipt (default to Jayasudhaa if customer.email not provided)
+    let email = { success:false, error:'not_configured' };
+    if (resend) {
+      try {
+        const to = (customer.email && String(customer.email).trim()) || DEFAULT_EMAIL_TO;
+        const html = renderEmailHTML({
+          orderId,
+          customer,
+          fulfillment,
+          lines: priced.lines,
+          subtotal: priced.subtotal,
+          tax: priced.tax,
+          total: priced.total,
+          notes
+        });
+        await resend.emails.send({
+          from: EMAIL_FROM,
+          to,
+          subject: `Order Confirmation – ${orderId}`,
+          html
+        });
+        email = { success:true };
+      } catch (e) {
+        email = { success:false, error: e?.message || 'email_error' };
+      }
+    }
+
     const spokenSummary =
       `Order ${orderId} placed. Total ${priced.total} dollars. ` +
       `${fulfillment?.type === 'delivery' ? 'Delivery' : 'Pickup'} ${fulfillment?.when || 'ASAP'}. ` +
-      (sms.success ? `I've texted your receipt.` : `I couldn't text the receipt.`);
+      (sms.success ? `I've texted your receipt. ` : `I couldn't text the receipt. `) +
+      (email.success ? `I've also emailed it.` : `Email not sent.`);
 
     // Log for debugging
-    console.log('ORDER', { orderId, customer, fulfillment, items: priced.lines, ...priced, notes, sms });
+    console.log('ORDER', { orderId, customer, fulfillment, items: priced.lines, ...priced, notes, sms, email });
 
-    res.status(200).json({ ok:true, orderId, ...priced, sms, spokenSummary });
+    res.status(200).json({ ok:true, orderId, ...priced, sms, email, spokenSummary });
   } catch (e) {
     console.error(e);
     res.status(500).json({ ok:false, error:'server_error' });
