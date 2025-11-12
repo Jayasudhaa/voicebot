@@ -19,11 +19,17 @@ const {
   DEFAULT_EMAIL_TO,             // e.g., "t.n.jayasudhaa@gmail.com"
   EMAIL_FROM,                   // e.g., "Order Bot <onboarding@resend.dev>"
 
+  // Branding
+  RESTAURANT_NAME,              // e.g., "Paradise Tavern"
+  RESTAURANT_PHONE,             // optional, e.g., "(719) 555-1212"
+
   // Menu + pricing
-  MENU_URL,                     // e.g., "https://voicebot-zeta.vercel.app/menu_categorized.json"
+  MENU_URL,                     // e.g., "https://<your-app>.vercel.app/menu_categorized.json"
   TAX_RATE,                     // e.g., "0.085"
   VERCEL_URL,                   // provided by Vercel at runtime
 } = process.env;
+
+const RESTO = RESTAURANT_NAME || 'Paradise Tavern';
 
 const smsClient =
   (twilioLib && TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN)
@@ -273,7 +279,7 @@ async function ensureMenuLoaded() {
 }
 
 /* -------------------------------------------
-   Helpers
+   Helpers: pricing & validation
 --------------------------------------------*/
 function lookup(item) {
   let key = norm(item?.sku || item?.name || '');
@@ -306,6 +312,16 @@ function price(items = []) {
 
 function isE164(p) { return /^\+?[1-9]\d{1,14}$/.test((p || '').trim()); }
 
+function normalizePhone(p) {
+  const raw = String(p || '').trim();
+  if (!raw) return null;
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+  if (/^\+?[1-9]\d{1,14}$/.test(raw)) return raw.startsWith('+') ? raw : `+${raw}`;
+  return null;
+}
+
 function parseBody(req) {
   let b = req.body;
   if (!b) return {};
@@ -319,47 +335,81 @@ function parseBody(req) {
 /* -------------------------------------------
    Email (Resend) — lazy require, won’t crash
 --------------------------------------------*/
-async function sendEmailReceipt({ orderId, customer, fulfillment, lines, subtotal, tax, total, notes }) {
+async function sendEmailReceipt({ orderId, customer, customerPhone, fulfillment, lines, subtotal, tax, total, notes }) {
   try {
     if (!RESEND_API_KEY) return { success: false, error: 'missing_RESEND_API_KEY' };
 
     let ResendCtor;
-    try {
-      ResendCtor = require('resend').Resend;
-    } catch {
-      return { success: false, error: 'resend_module_not_installed' };
-    }
+    try { ResendCtor = require('resend').Resend; }
+    catch { return { success: false, error: 'resend_module_not_installed' }; }
 
     const resend = new ResendCtor(RESEND_API_KEY);
     const to = (customer?.email && String(customer.email).trim()) || DEFAULT_EMAIL_TO || 't.n.jayasudhaa@gmail.com';
     const from = EMAIL_FROM || 'Order Bot <onboarding@resend.dev>';
 
+    // Build item rows (Item | Qty | Unit | Line)
     const rows = lines.map(li => `
       <tr>
-        <td style="padding:6px 8px;border-bottom:1px solid #eee;">${li.qty} × ${li.name}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right;">$${(li.unitPrice * li.qty).toFixed(2)}</td>
+        <td style="padding:8px;border-bottom:1px solid #eee;">${li.name}</td>
+        <td style="padding:8px;border-bottom:1px solid #eee;text-align:center;">${li.qty}</td>
+        <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">$${li.unitPrice.toFixed(2)}</td>
+        <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">$${li.lineTotal.toFixed(2)}</td>
       </tr>
     `).join('');
 
+    const customerLine =
+      (customer?.name ? `<strong>${customer.name}</strong>` : 'Guest') +
+      (customerPhone ? ` — <a href="tel:${customerPhone}" style="color:#0a7;">${customerPhone}</a>` : '') +
+      (customer?.email ? ` — <a href="mailto:${customer.email}" style="color:#0a7;">${customer.email}</a>` : '');
+
     const html = `
-      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#222;">
-        <h2 style="margin:0 0 8px;">Thanks for your order!</h2>
-        <p style="margin:0 0 16px;">Hi ${customer?.name || 'Guest'}, your order has been received.</p>
+      <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#222;max-width:640px;">
+        <h1 style="margin:0 0 6px;font-size:20px;">${RESTO}</h1>
+        <p style="margin:0 0 14px;color:#555;">Order Confirmation</p>
+
         <p style="margin:0 0 6px;"><strong>Order ID:</strong> ${orderId}</p>
-        <p style="margin:0 0 6px;"><strong>Fulfillment:</strong> ${fulfillment?.type || ''} — ${fulfillment?.when || ''}${fulfillment?.address ? ` — ${fulfillment.address}` : ''}</p>
-        <table cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin:12px 0 8px;">
+        <p style="margin:0 0 6px;"><strong>Customer:</strong> ${customerLine}</p>
+        <p style="margin:0 0 14px;"><strong>${fulfillment?.type === 'delivery' ? 'Delivery' : 'Pickup'}:</strong> ${fulfillment?.when || 'ASAP'}${fulfillment?.address ? ` — ${fulfillment.address}` : ''}</p>
+
+        <table cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin:6px 0 12px;">
+          <thead>
+            <tr>
+              <th align="left"  style="padding:8px;border-bottom:2px solid #ddd;">Item</th>
+              <th align="center"style="padding:8px;border-bottom:2px solid #ddd;">Qty</th>
+              <th align="right" style="padding:8px;border-bottom:2px solid #ddd;">Unit</th>
+              <th align="right" style="padding:8px;border-bottom:2px solid #ddd;">Line</th>
+            </tr>
+          </thead>
           <tbody>${rows}</tbody>
           <tfoot>
-            <tr><td style="padding:6px 8px;text-align:right;"><strong>Subtotal</strong></td><td style="padding:6px 8px;text-align:right;">$${subtotal.toFixed(2)}</td></tr>
-            <tr><td style="padding:6px 8px;text-align:right;"><strong>Tax</strong></td><td style="padding:6px 8px;text-align:right;">$${tax.toFixed(2)}</td></tr>
-            <tr><td style="padding:6px 8px;text-align:right;"><strong>Total</strong></td><td style="padding:6px 8px;text-align:right;"><strong>$${total.toFixed(2)}</strong></td></tr>
+            <tr>
+              <td colspan="3" style="padding:8px;text-align:right;"><strong>Subtotal</strong></td>
+              <td style="padding:8px;text-align:right;">$${subtotal.toFixed(2)}</td>
+            </tr>
+            <tr>
+              <td colspan="3" style="padding:8px;text-align:right;"><strong>Tax</strong></td>
+              <td style="padding:8px;text-align:right;">$${tax.toFixed(2)}</td>
+            </tr>
+            <tr>
+              <td colspan="3" style="padding:8px;text-align:right;"><strong>Total</strong></td>
+              <td style="padding:8px;text-align:right;"><strong>$${total.toFixed(2)}</strong></td>
+            </tr>
           </tfoot>
         </table>
-        ${notes ? `<p style="margin:8px 0 0;"><strong>Notes:</strong> ${notes}</p>` : ''}
+
+        ${notes ? `<p style="margin:8px 0;"><strong>Notes:</strong> ${notes}</p>` : ''}
+
+        ${RESTAURANT_PHONE ? `<p style="margin:12px 0 0;color:#555;">Questions? Call us at <strong>${RESTAURANT_PHONE}</strong>.</p>` : ''}
       </div>
     `;
 
-    await resend.emails.send({ from, to, subject: `Order Confirmation – ${orderId}`, html });
+    await resend.emails.send({
+      from,
+      to,
+      subject: `${RESTO} — Order Confirmation ${orderId}`,
+      html,
+    });
+
     return { success: true };
   } catch (e) {
     return { success: false, error: e?.message || 'email_error' };
@@ -375,8 +425,20 @@ module.exports = async (req, res) => {
 
     const body = parseBody(req);
     const { customer = {}, fulfillment = {}, items = [], notes = '' } = body || {};
-    const phone = (customer.phone || '').trim();
-    const orderId = `ord_${Date.now()}`;
+
+    // Enforce name + phone collection (bot must ask if missing)
+    const phoneNorm = normalizePhone(customer.phone);
+    if (!customer?.name || !phoneNorm) {
+      const need = { name: !customer?.name, phone: !phoneNorm };
+      const say =
+        (!customer?.name && !phoneNorm)
+          ? "I can place your order—what’s your name, and what phone number should I send the confirmation to? Please include country code, for example +1 719-555-1212."
+          : (!customer?.name)
+            ? "Got it. What name should I put on the order?"
+            : "Thanks. What phone number should I send the confirmation to? Please include the country code, e.g., +1 719-555-1212.";
+      return res.status(200).json({ ok: false, error: 'missing_contact', need, say });
+    }
+    const phone = phoneNorm;
 
     // Load menu (URL → local → embedded)
     await ensureMenuLoaded();
@@ -385,15 +447,25 @@ module.exports = async (req, res) => {
     const priced = price(items);
 
     // Build SMS (compliance: STOP/HELP)
+    const customerName = (customer?.name || 'Guest').trim();
+    const customerPhoneForDisplay = phone || (customer?.phone || '').trim();
+
     const smsLines = priced.lines.map(
-      (li) => `${li.qty}x ${li.name}` + (li.options?.spice ? ` (${li.options.spice})` : '') + ` - $${li.lineTotal.toFixed(2)}`
+      (li) => `${li.qty} x ${li.name} @ $${li.unitPrice.toFixed(2)} = $${li.lineTotal.toFixed(2)}`
     );
+
     const smsText =
-      `Paradise Tavern\nOrder ${orderId}\n` +
-      smsLines.join('\n') +
-      `\nSubtotal: $${priced.subtotal}\nTax: $${priced.tax}\nTotal: $${priced.total}` +
-      `\n${fulfillment?.type === 'delivery' ? 'Delivery' : 'Pickup'}: ${fulfillment?.when || 'ASAP'}` +
-      (notes ? `\nNotes: ${notes}` : '') +
+      `${RESTO}\n` +
+      `Order ${orderId = `ord_${Date.now()}`}\n` + // define orderId while composing
+      `Customer: ${customerName}\n` +
+      (customerPhoneForDisplay ? `Phone: ${customerPhoneForDisplay}\n` : '') +
+      `\nItems:\n${smsLines.join('\n')}\n` +
+      `\nSubtotal: $${priced.subtotal.toFixed(2)}\n` +
+      `Tax: $${priced.tax.toFixed(2)}\n` +
+      `Total: $${priced.total.toFixed(2)}\n` +
+      `${fulfillment?.type === 'delivery' ? 'Delivery' : 'Pickup'}: ${fulfillment?.when || 'ASAP'}\n` +
+      (notes ? `Notes: ${notes}\n` : '') +
+      (RESTAURANT_PHONE ? `\nQuestions? Call ${RESTAURANT_PHONE}\n` : '') +
       `\nReply STOP to opt out. HELP for help.`;
 
     // Try SMS if configured & number is valid E.164
@@ -419,6 +491,7 @@ module.exports = async (req, res) => {
     const email = await sendEmailReceipt({
       orderId,
       customer,
+      customerPhone: phone,
       fulfillment,
       lines: priced.lines,
       subtotal: priced.subtotal,
@@ -428,7 +501,9 @@ module.exports = async (req, res) => {
     });
 
     const spokenSummary =
-      `Order ${orderId} placed. Total ${priced.total} dollars. ` +
+      `Order ${orderId} placed at ${RESTO}. ` +
+      `Customer ${customerName}` + (customerPhoneForDisplay ? `, phone ${customerPhoneForDisplay}. ` : '. ') +
+      `Total ${priced.total} dollars. ` +
       `${fulfillment?.type === 'delivery' ? 'Delivery' : 'Pickup'} ${fulfillment?.when || 'ASAP'}. ` +
       (sms.success ? `I've texted your receipt. ` : `I couldn't text the receipt. `) +
       (email.success ? `I've also emailed it.` : `Email not sent.`);
