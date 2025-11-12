@@ -1,89 +1,131 @@
-// /api/place_order.js  (CommonJS, Vercel/Next API function)
+// /api/place_order.js  — Vercel/Next API route (CommonJS)
+
 const twilio = require('twilio');
+const path = require('path');
+const https = require('https');
 
 const {
+  // SMS (optional)
   TWILIO_ACCOUNT_SID,
   TWILIO_AUTH_TOKEN,
   TWILIO_SMS_FROM,
   TWILIO_MESSAGING_SERVICE_SID,
+
+  // Email (Resend)
   RESEND_API_KEY,
-  DEFAULT_EMAIL_TO,
-  EMAIL_FROM,
-  MENU_URL,
-  TAX_RATE,
-  VERCEL_URL,
+  DEFAULT_EMAIL_TO,             // e.g., "t.n.jayasudhaa@gmail.com"
+  EMAIL_FROM,                   // e.g., "Order Bot <onboarding@resend.dev>"
+
+  // Menu + pricing
+  MENU_URL,                     // e.g., "https://voicebot-zeta.vercel.app/menu_categorized.json"
+  TAX_RATE,                     // e.g., "0.085"
+  VERCEL_URL,                   // provided by Vercel at runtime
 } = process.env;
 
 const smsClient =
   TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN ? twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) : null;
 
-// -------- MENU LOADING (remote first, local fallback) --------
-let MENU = []; // flattened [{name, price, sku}]
-// top: add
-const path = require('path');
+/* -------------------------------------------
+   MENU LOADING (URL → local → embedded)
+--------------------------------------------*/
 
-// replace your ensureMenuLoaded with:
+// tiny https JSON fetcher (avoids Node fetch inconsistencies)
+function fetchJson(url) {
+  return new Promise((resolve, reject) => {
+    https
+      .get(url, (res) => {
+        let data = '';
+        res.on('data', (c) => (data += c));
+        res.on('end', () => {
+          try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
+        });
+      })
+      .on('error', reject);
+  });
+}
+
+// embedded minimal fallback so totals never return 0
+const EMBEDDED_MENU = [
+  { name: 'Fresh Lime Soda - Salt', price: 4,   sku: 'FRESH-LIME-SODA-SALT' },
+  { name: 'Garlic Naan',            price: 4,   sku: 'GARLIC-NAAN' },
+  { name: 'Veg Dum Biryani',        price: 16,  sku: 'VEG-DUM-BIRYANI' },
+  { name: 'Butter Naan',            price: 3.5, sku: 'BUTTER-NAAN' },
+];
+
+let MENU = []; // flattened [{ name, price, sku }]
+
 async function ensureMenuLoaded() {
   if (MENU.length) return;
 
-  // 1) Try remote (absolute URL or env override)
-  const url = process.env.MENU_URL || 'https://voicebot-zeta.vercel.app/menu_categorized.json';
+  // 1) URL (explicit or derived)
+  const host = VERCEL_URL || 'voicebot-zeta.vercel.app';
+  const url = MENU_URL || `https://${host}/menu_categorized.json`;
   try {
-    const resp = await fetch(url, { cache: 'no-store' });
-    if (resp.ok) {
-      const data = await resp.json();
-      if (Array.isArray(data?.categories)) {
-        MENU = data.categories.flatMap(cat =>
-          (cat.items || []).map(it => ({
-            name: it.name,
-            price: Number(it.price),
-            sku: (it.name || '').toUpperCase().replace(/[^A-Z0-9]+/g,'-').replace(/(^-|-$)/g,''),
-          }))
-        );
-        if (MENU.length) return;
+    const data = await fetchJson(url);
+    if (Array.isArray(data?.categories)) {
+      MENU = data.categories.flatMap((cat) =>
+        (cat.items || []).map((it) => ({
+          name: it.name,
+          price: Number(it.price),
+          sku: (it.name || '')
+            .toUpperCase()
+            .replace(/[^A-Z0-9]+/g, '-')
+            .replace(/(^-|-$)/g, ''),
+        }))
+      );
+      if (MENU.length) {
+        console.log('[MENU] Loaded from URL:', url, 'size=', MENU.length);
+        return;
       }
-    } else {
-      console.error('MENU fetch failed', resp.status);
     }
+    console.error('[MENU] URL returned unexpected shape:', url);
   } catch (e) {
-    console.error('MENU fetch error', e.message);
+    console.error('[MENU] URL fetch error:', url, e.message);
   }
 
-  // 2) Local fallback packaged with the function
+  // 2) Local file bundled with the function: api/menu_categorized.json
   try {
     const local = require(path.join(__dirname, 'menu_categorized.json'));
     if (Array.isArray(local?.categories)) {
-      MENU = local.categories.flatMap(cat =>
-        (cat.items || []).map(it => ({
+      MENU = local.categories.flatMap((cat) =>
+        (cat.items || []).map((it) => ({
           name: it.name,
           price: Number(it.price),
-          sku: (it.name || '').toUpperCase().replace(/[^A-Z0-9]+/g,'-').replace(/(^-|-$)/g,''),
+          sku: (it.name || '')
+            .toUpperCase()
+            .replace(/[^A-Z0-9]+/g, '-')
+            .replace(/(^-|-$)/g, ''),
         }))
       );
-      return;
+      if (MENU.length) {
+        console.log('[MENU] Loaded local fallback: api/menu_categorized.json size=', MENU.length);
+        return;
+      }
     }
+    console.error('[MENU] Local fallback had unexpected shape');
   } catch (e) {
-    console.error('MENU local require failed', e.message);
+    console.error('[MENU] Local fallback require failed:', e.message);
   }
 
-  MENU = []; // last resort
+  // 3) Embedded minimal
+  MENU = EMBEDDED_MENU.slice();
+  console.warn('[MENU] Using EMBEDDED_MENU fallback size=', MENU.length);
 }
 
+/* -------------------------------------------
+   HELPERS
+--------------------------------------------*/
 
-// -------- HELPERS --------
 function lookup(item) {
   const key = String(item?.sku || item?.name || '').toLowerCase();
   return (
-    MENU.find(
-      (m) => m.sku?.toLowerCase() === key || m.name?.toLowerCase() === key
-    ) || null
+    MENU.find((m) => m.sku?.toLowerCase() === key || m.name?.toLowerCase() === key) || null
   );
 }
 
 function price(items = []) {
   let subtotal = 0;
   const lines = (items || []).map((it) => {
-    // Prefer menu price if found; else allow request unitPrice/price
     const found = lookup(it);
     const name = found?.name || it.name || it.sku || 'Item';
     const sku =
@@ -95,14 +137,7 @@ function price(items = []) {
     const unit = Number(found?.price ?? it.unitPrice ?? it.price ?? 0);
     const lineTotal = +(qty * unit).toFixed(2);
     subtotal += lineTotal;
-    return {
-      name,
-      sku,
-      qty,
-      unitPrice: unit,
-      options: it.options || {},
-      lineTotal,
-    };
+    return { name, sku, qty, unitPrice: unit, options: it.options || {}, lineTotal };
   });
   subtotal = +subtotal.toFixed(2);
   const taxRate = Number(TAX_RATE ?? 0.085);
@@ -119,24 +154,18 @@ function parseBody(req) {
   let b = req.body;
   if (!b) return {};
   if (typeof b === 'string') {
-    try {
-      return JSON.parse(b);
-    } catch {
-      return {};
-    }
+    try { return JSON.parse(b); } catch { return {}; }
   }
   if (typeof b === 'object' && typeof b.json === 'string') {
-    try {
-      return JSON.parse(b.json);
-    } catch {
-      return {};
-    }
+    try { return JSON.parse(b.json); } catch { return {}; }
   }
   return b;
 }
 
-// -------- EMAIL (Resend) --------
-// Lazy-require so missing module/env won't crash cold starts
+/* -------------------------------------------
+   EMAIL (Resend) — lazy require, won’t crash
+--------------------------------------------*/
+
 async function sendEmailReceipt({ orderId, customer, fulfillment, lines, subtotal, tax, total, notes }) {
   try {
     if (!RESEND_API_KEY) return { success: false, error: 'missing_RESEND_API_KEY' };
@@ -152,23 +181,19 @@ async function sendEmailReceipt({ orderId, customer, fulfillment, lines, subtota
     const to = (customer?.email && String(customer.email).trim()) || DEFAULT_EMAIL_TO || 't.n.jayasudhaa@gmail.com';
     const from = EMAIL_FROM || 'Order Bot <onboarding@resend.dev>';
 
-    const rows = lines
-      .map(
-        (li) =>
-          `<tr>
-             <td style="padding:6px 8px;border-bottom:1px solid #eee;">${li.qty} × ${li.name}</td>
-             <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right;">$${(li.unitPrice * li.qty).toFixed(2)}</td>
-           </tr>`
-      )
-      .join('');
+    const rows = lines.map(li => `
+      <tr>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;">${li.qty} × ${li.name}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right;">$${(li.unitPrice * li.qty).toFixed(2)}</td>
+      </tr>
+    `).join('');
+
     const html = `
       <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#222;">
         <h2 style="margin:0 0 8px;">Thanks for your order!</h2>
         <p style="margin:0 0 16px;">Hi ${customer?.name || 'Guest'}, your order has been received.</p>
         <p style="margin:0 0 6px;"><strong>Order ID:</strong> ${orderId}</p>
-        <p style="margin:0 0 6px;"><strong>Fulfillment:</strong> ${fulfillment?.type || ''} — ${fulfillment?.when || ''}${
-      fulfillment?.address ? ` — ${fulfillment.address}` : ''
-    }</p>
+        <p style="margin:0 0 6px;"><strong>Fulfillment:</strong> ${fulfillment?.type || ''} — ${fulfillment?.when || ''}${fulfillment?.address ? ` — ${fulfillment.address}` : ''}</p>
         <table cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin:12px 0 8px;">
           <tbody>${rows}</tbody>
           <tfoot>
@@ -181,20 +206,17 @@ async function sendEmailReceipt({ orderId, customer, fulfillment, lines, subtota
       </div>
     `;
 
-    await resend.emails.send({
-      from,
-      to,
-      subject: `Order Confirmation – ${orderId}`,
-      html,
-    });
-
+    await resend.emails.send({ from, to, subject: `Order Confirmation – ${orderId}`, html });
     return { success: true };
   } catch (e) {
     return { success: false, error: e?.message || 'email_error' };
   }
 }
 
-// -------- HANDLER --------
+/* -------------------------------------------
+   HANDLER
+--------------------------------------------*/
+
 module.exports = async (req, res) => {
   try {
     if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
@@ -204,17 +226,15 @@ module.exports = async (req, res) => {
     const phone = (customer.phone || '').trim();
     const orderId = `ord_${Date.now()}`;
 
-    // Ensure menu is ready (remote or local)
+    // Load menu (URL → local → embedded)
     await ensureMenuLoaded();
 
+    // Price the order
     const priced = price(items);
 
     // Build SMS (compliance: STOP/HELP)
     const smsLines = priced.lines.map(
-      (li) =>
-        `${li.qty}x ${li.name}` +
-        (li.options?.spice ? ` (${li.options.spice})` : '') +
-        ` - $${li.lineTotal.toFixed(2)}`
+      (li) => `${li.qty}x ${li.name}` + (li.options?.spice ? ` (${li.options.spice})` : '') + ` - $${li.lineTotal.toFixed(2)}`
     );
     const smsText =
       `Paradise Tavern\nOrder ${orderId}\n` +
@@ -224,7 +244,7 @@ module.exports = async (req, res) => {
       (notes ? `\nNotes: ${notes}` : '') +
       `\nReply STOP to opt out. HELP for help.`;
 
-    // Try SMS if configured & number looks valid
+    // Try SMS if configured & number is valid E.164
     let sms = { success: false, sid: null, error: 'not_configured' };
     if (smsClient && isE164(phone)) {
       try {
@@ -243,7 +263,7 @@ module.exports = async (req, res) => {
       sms = { success: false, error: 'invalid_phone' };
     }
 
-    // Email receipt (safe, won’t crash if missing)
+    // Email receipt (safe: won’t crash if missing)
     const email = await sendEmailReceipt({
       orderId,
       customer,
@@ -261,16 +281,7 @@ module.exports = async (req, res) => {
       (sms.success ? `I've texted your receipt. ` : `I couldn't text the receipt. `) +
       (email.success ? `I've also emailed it.` : `Email not sent.`);
 
-    console.log('ORDER', {
-      orderId,
-      customer,
-      fulfillment,
-      items: priced.lines,
-      ...priced,
-      notes,
-      sms,
-      email,
-    });
+    console.log('ORDER', { orderId, customer, fulfillment, items: priced.lines, ...priced, notes, sms, email });
 
     res.status(200).json({ ok: true, orderId, ...priced, sms, email, spokenSummary });
   } catch (e) {
