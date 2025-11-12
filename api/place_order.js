@@ -1,6 +1,9 @@
 // /api/place_order.js  — Vercel/Next API route (CommonJS)
 
-const twilio = require('twilio');
+// Guarded Twilio import (prevents cold-start crash if not installed)
+let twilioLib = null;
+try { twilioLib = require('twilio'); } catch {}
+
 const path = require('path');
 const https = require('https');
 
@@ -23,7 +26,9 @@ const {
 } = process.env;
 
 const smsClient =
-  TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN ? twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) : null;
+  (twilioLib && TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN)
+    ? twilioLib(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+    : null;
 
 /* -------------------------------------------
    MENU LOADING (URL → local → embedded)
@@ -52,7 +57,31 @@ const EMBEDDED_MENU = [
   { name: 'Butter Naan',            price: 3.5, sku: 'BUTTER-NAAN' },
 ];
 
-let MENU = []; // flattened [{ name, price, sku }]
+// Single authoritative declarations (do NOT redeclare later)
+let MENU = [];                        // flattened [{ name, price, sku }]
+let MENU_MAP = Object.create(null);   // fast lookup index
+
+const ALIASES = {
+  'roti': 'tandoori roti',
+  'tandoori-roti': 'tandoori roti',
+  'tandoori  roti': 'tandoori roti', // double-space variant
+};
+
+const norm = (s) =>
+  String(s || '')
+    .toLowerCase()
+    .normalize('NFKC')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+function rebuildIndex() {
+  MENU_MAP = Object.create(null);
+  for (const m of MENU) {
+    MENU_MAP[norm(m.name)] = m;
+    MENU_MAP[norm(m.sku)]  = m;
+  }
+}
 
 async function ensureMenuLoaded() {
   if (MENU.length) return;
@@ -74,6 +103,7 @@ async function ensureMenuLoaded() {
         }))
       );
       if (MENU.length) {
+        rebuildIndex();
         console.log('[MENU] Loaded from URL:', url, 'size=', MENU.length);
         return;
       }
@@ -98,6 +128,7 @@ async function ensureMenuLoaded() {
         }))
       );
       if (MENU.length) {
+        rebuildIndex();
         console.log('[MENU] Loaded local fallback: api/menu_categorized.json size=', MENU.length);
         return;
       }
@@ -109,6 +140,7 @@ async function ensureMenuLoaded() {
 
   // 3) Embedded minimal
   MENU = EMBEDDED_MENU.slice();
+  rebuildIndex();
   console.warn('[MENU] Using EMBEDDED_MENU fallback size=', MENU.length);
 }
 
@@ -116,32 +148,6 @@ async function ensureMenuLoaded() {
    HELPERS
 --------------------------------------------*/
 
-// --- add near the top ---
-const ALIASES = {
-  'roti': 'tandoori roti',
-  'tandoori-roti': 'tandoori roti',
-  'tandoori  roti': 'tandoori roti', // double-space variants
-};
-
-const norm = (s) =>
-  String(s || '')
-    .toLowerCase()
-    .normalize('NFKC')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-let MENU = [];
-let MENU_MAP = Object.create(null);
-
-// --- inside ensureMenuLoaded(), after you build MENU, add: ---
-MENU_MAP = Object.create(null);
-for (const m of MENU) {
-  MENU_MAP[norm(m.name)] = m;
-  MENU_MAP[norm(m.sku)] = m;
-}
-
-// --- replace your lookup() with: ---
 function lookup(item) {
   let key = norm(item?.sku || item?.name || '');
   if (ALIASES[key]) key = norm(ALIASES[key]);
@@ -171,16 +177,12 @@ function price(items = []) {
   return { lines, subtotal, tax, total };
 }
 
-function isE164(p) {
-  return /^\+?[1-9]\d{1,14}$/.test((p || '').trim());
-}
+function isE164(p) { return /^\+?[1-9]\d{1,14}$/.test((p || '').trim()); }
 
 function parseBody(req) {
   let b = req.body;
   if (!b) return {};
-  if (typeof b === 'string') {
-    try { return JSON.parse(b); } catch { return {}; }
-  }
+  if (typeof b === 'string') { try { return JSON.parse(b); } catch { return {}; } }
   if (typeof b === 'object' && typeof b.json === 'string') {
     try { return JSON.parse(b.json); } catch { return {}; }
   }
