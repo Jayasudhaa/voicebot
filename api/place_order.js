@@ -116,11 +116,36 @@ async function ensureMenuLoaded() {
    HELPERS
 --------------------------------------------*/
 
+// --- add near the top ---
+const ALIASES = {
+  'roti': 'tandoori roti',
+  'tandoori-roti': 'tandoori roti',
+  'tandoori  roti': 'tandoori roti', // double-space variants
+};
+
+const norm = (s) =>
+  String(s || '')
+    .toLowerCase()
+    .normalize('NFKC')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+let MENU = [];
+let MENU_MAP = Object.create(null);
+
+// --- inside ensureMenuLoaded(), after you build MENU, add: ---
+MENU_MAP = Object.create(null);
+for (const m of MENU) {
+  MENU_MAP[norm(m.name)] = m;
+  MENU_MAP[norm(m.sku)] = m;
+}
+
+// --- replace your lookup() with: ---
 function lookup(item) {
-  const key = String(item?.sku || item?.name || '').toLowerCase();
-  return (
-    MENU.find((m) => m.sku?.toLowerCase() === key || m.name?.toLowerCase() === key) || null
-  );
+  let key = norm(item?.sku || item?.name || '');
+  if (ALIASES[key]) key = norm(ALIASES[key]);
+  return MENU_MAP[key] || null;
 }
 
 function price(items = []) {
