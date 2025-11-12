@@ -19,50 +19,56 @@ const smsClient =
 
 // -------- MENU LOADING (remote first, local fallback) --------
 let MENU = []; // flattened [{name, price, sku}]
+// top: add
+const path = require('path');
+
+// replace your ensureMenuLoaded with:
 async function ensureMenuLoaded() {
   if (MENU.length) return;
 
-  // 1) Try remote (your deployed public file)
-  const host = VERCEL_URL || 'voicebot-zeta.vercel.app';
-  const url = MENU_URL || `https://${host}/menu_categorized.json`;
-
+  // 1) Try remote (absolute URL or env override)
+  const url = process.env.MENU_URL || 'https://voicebot-zeta.vercel.app/menu_categorized.json';
   try {
-    if (typeof fetch === 'function') {
-      const resp = await fetch(url, { cache: 'no-store' });
-      if (resp.ok) {
-        const data = await resp.json();
-        if (Array.isArray(data?.categories)) {
-          MENU = data.categories.flatMap((cat) =>
-            (cat.items || []).map((it) => ({
-              name: it.name,
-              price: Number(it.price),
-              sku: (it.name || '').toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
-            }))
-          );
-          if (MENU.length) return;
-        }
+    const resp = await fetch(url, { cache: 'no-store' });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (Array.isArray(data?.categories)) {
+        MENU = data.categories.flatMap(cat =>
+          (cat.items || []).map(it => ({
+            name: it.name,
+            price: Number(it.price),
+            sku: (it.name || '').toUpperCase().replace(/[^A-Z0-9]+/g,'-').replace(/(^-|-$)/g,''),
+          }))
+        );
+        if (MENU.length) return;
       }
+    } else {
+      console.error('MENU fetch failed', resp.status);
     }
-  } catch (_) {
-    // fall through to local
+  } catch (e) {
+    console.error('MENU fetch error', e.message);
   }
 
-  // 2) Fallback: bundled local file under /public
+  // 2) Local fallback packaged with the function
   try {
-    const data = require('../public/menu_categorized.json');
-    if (Array.isArray(data?.categories)) {
-      MENU = data.categories.flatMap((cat) =>
-        (cat.items || []).map((it) => ({
+    const local = require(path.join(__dirname, 'menu_categorized.json'));
+    if (Array.isArray(local?.categories)) {
+      MENU = local.categories.flatMap(cat =>
+        (cat.items || []).map(it => ({
           name: it.name,
           price: Number(it.price),
-          sku: (it.name || '').toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+          sku: (it.name || '').toUpperCase().replace(/[^A-Z0-9]+/g,'-').replace(/(^-|-$)/g,''),
         }))
       );
+      return;
     }
-  } catch (_) {
-    MENU = [];
+  } catch (e) {
+    console.error('MENU local require failed', e.message);
   }
+
+  MENU = []; // last resort
 }
+
 
 // -------- HELPERS --------
 function lookup(item) {
